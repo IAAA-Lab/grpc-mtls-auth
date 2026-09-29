@@ -1,6 +1,6 @@
 {
   "name": "Spring Boot 2.7 gRPC mutual TLS (Java 8)",
-  "image": "mcr.microsoft.com/devcontainers/java:1-8-bookworm",
+  "image": "mcr.microsoft.com/devcontainers/java:8-bookworm",
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {}
   },
