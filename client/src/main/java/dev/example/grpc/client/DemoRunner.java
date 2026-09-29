@@ -80,11 +80,11 @@ public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
             for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
                 try {
                     HelloReply reply = stub.sayHello(request);
-                    log.error("se aceptó el certificado extraño: {}", reply.getMessage());
+                    log.error("se aceptó el certificado ajeno: {}", reply.getMessage());
                     return false;
                 } catch (StatusRuntimeException ex) {
                     if (isHandshakeFailure(ex)) {
-                        log.info("certificado extraño rechazado: {}", ex.getStatus());
+                        log.info("certificado ajeno rechazado: {}", ex.getStatus());
                         return true;
                     }
                     if (isRetryable(ex) && attempt < ATTEMPTS) {
@@ -92,7 +92,7 @@ public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
                         Thread.sleep(1000L);
                         continue;
                     }
-                    log.error("la llamada con certificado extraño falló por un motivo inesperado: {}", ex.getStatus());
+                    log.error("la llamada con certificado ajeno falló por un motivo inesperado: {}", ex.getStatus());
                     return false;
                 }
             }
