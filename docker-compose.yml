@@ -1,0 +1,40 @@
+services:
+  certs:
+    image: alpine:3.20
+    command: ["sh", "/scripts/generate-certs.sh"]
+    volumes:
+      - ./scripts/generate-certs.sh:/scripts/generate-certs.sh:ro
+      - certs:/certs
+
+  server:
+    build:
+      context: .
+      args:
+        MODULE: server
+    ports:
+      - "9090:9090"
+    volumes:
+      - certs:/certs:ro
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+
+  client:
+    build:
+      context: .
+      args:
+        MODULE: client
+    environment:
+      GRPC_SERVER_ADDRESS: static://server:9090
+      GRPC_SERVER_HOST: server
+      GRPC_SERVER_PORT: "9090"
+    volumes:
+      - certs:/certs:ro
+    depends_on:
+      certs:
+        condition: service_completed_successfully
+      server:
+        condition: service_started
+
+volumes:
+  certs:

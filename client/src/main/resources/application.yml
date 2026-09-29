@@ -1,0 +1,24 @@
+spring:
+  main:
+    web-application-type: none
+
+grpc:
+  client:
+    greeter:
+      address: ${GRPC_SERVER_ADDRESS:static://localhost:9090}
+      negotiation-type: TLS
+      security:
+        client-auth-enabled: true
+        certificate-chain: file:/certs/client.crt
+        private-key: file:/certs/client.pkcs8.pem
+        trust-cert-collection: file:/certs/ca.crt
+
+app:
+  grpc:
+    host: ${GRPC_SERVER_HOST:localhost}
+    port: ${GRPC_SERVER_PORT:9090}
+
+logging:
+  level:
+    io.grpc: INFO
+    net.devh.boot.grpc: INFO

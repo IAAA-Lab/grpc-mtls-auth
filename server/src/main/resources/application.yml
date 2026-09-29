@@ -1,0 +1,18 @@
+spring:
+  main:
+    web-application-type: none
+
+grpc:
+  server:
+    port: ${GRPC_PORT:9090}
+    security:
+      enabled: true
+      certificate-chain: file:/certs/server.crt
+      private-key: file:/certs/server.pkcs8.pem
+      trust-cert-collection: file:/certs/ca.crt
+      client-auth: REQUIRE
+
+logging:
+  level:
+    io.grpc: INFO
+    net.devh.boot.grpc: INFO
