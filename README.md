@@ -1,85 +1,123 @@
-# gRPC client and server on Spring Boot 2.7
+# Cliente y servidor gRPC con Spring Boot 2.7
 
-Small mutual-TLS example. Spring Boot **2.7.18** is the last 2.7 release. **Java 8** is the oldest Java that Spring Boot 2.x can run.
+Dos programas Java **8** y Spring Boot **2.7.18** se llaman por red con **gRPC**. La conexión va siempre cifrada con **TLS**.
+La guía de gRPC pide TLS en el canal cuando se usan tokens, y la mayoría de
+implementaciones no envían credenciales por un canal sin cifrar.
 
-The server listens only with TLS and **requires** a client certificate (`client-auth: REQUIRE`). The client negotiates **TLS** and presents its certificate. A second call uses a certificate from another CA; the server rejects that handshake. There is no plaintext port.
+gRPC distingue **channel credentials** (TLS, en el canal) y **call
+credentials** (en cada llamada). En gRPC lo habitual es:
 
-On that TLS channel the client also sends a bearer call credential (`CallCredentialsHelper.bearerAuth`). Spring Security reads it with `BearerAuthenticationReader` and allows `sayHello` only for `ROLE_GREETER` (`@Secured`). The demo then checks three application results: an unknown token is `UNAUTHENTICATED`, a token without that role is `PERMISSION_DENIED`, and `greeter-token` returns `Hello, Codespaces`.
+- **Bearer token** como `CallCredentials`: va en cada llamada, normalmente en
+  la cabecera `authorization` del metadata. Suele ser un access token
+  OAuth 2.0, a menudo con formato JWT. Si es un JWT, firma, caducidad y roles
+  van en las claims (en Spring Security, `JwtAuthenticationToken`).
+- **Client certificate** (mutual TLS, mTLS): el cliente se autentica en el handshake TLS
+  con un certificado x509. El subject puede bastar como identidad, sin un
+  segundo token.
+- **Los dos**: mTLS en el canal y bearer token en cada llamada. gRPC combina
+  channel credentials y call credentials para eso.
 
-Certificates are generated into a Compose volume when the stack starts. They are a demo CA, not a trust anchor to reuse.
+Este ejemplo es **los dos**: mTLS abre el canal; un bearer token
+(por simplicidad no es un JWT) decide el permiso.
 
-## Codespaces
+El servidor exige certificado de cliente (`client-auth: REQUIRE`). Si lo firma
+otra CA, se rechaza el handshake TLS y no se llega al token. Si es la CA de la
+demo, el cliente envía el bearer token (`CallCredentialsHelper.bearerAuth`).
+Spring Security lo lee (`BearerAuthenticationReader`) y
+`@Secured("ROLE_GREETER")` solo permite `sayHello` a ese rol.
 
-Open this repository in a Codespace (the dev container is Java 8 and includes Docker). Then:
+`BearerAuthenticationReader` convierte esa cadena en un
+`PreAuthenticatedAuthenticationToken`: el bearer token ya viene en el
+metadata. Un `AuthenticationProvider` propio comprueba si es `greeter-token`
+u `observer-token` y asigna el rol adecuado. Se usa
+`PreAuthenticatedAuthenticationToken` por simplicidad ya que no usamos JWT.
+
+Una **CA** firma certificados y dice «este servidor / este cliente es de los
+nuestros». `scripts/generate-certs.sh`
+crea al arrancar Compose una CA autofirmada (`CN=demo-ca`, ficheros `ca.crt`
+y `ca.key` en `/certs`). Esa CA firma el certificado del servidor
+(`CN=server`) y el del cliente de confianza (`CN=demo-client`). Servidor y
+cliente solo confían en `ca.crt` (`trust-cert-collection`).
+
+El script crea **otra** CA (`CN=stranger-ca`) y un certificado extraño. El
+servidor no tiene esa CA en el trust store: si el cliente usa ese
+certificado, el handshake falla. Así se ve qué pasa si el client certificate
+no es de «nuestra» CA.
+
+## Ejecución
+
+Codespace con Java 8 y Docker:
 
 ```bash
 docker compose up --build
 ```
 
-The client container exits 0 after the checks. Its log should show the stranger certificate rejected, `bearer token rejected`, `spring security denied the role`, then `call credential and spring security succeeded: Hello, Codespaces`.
+El cliente (`DemoRunner`) sale con código 0 solo si se cumplen, en este orden:
 
-## Tests
+1. petición con certificado de otra CA → rechazo TLS
+2. petición con certificado de la CA de la demo + `not-a-token` → `UNAUTHENTICATED`
+3. petición con el mismo certificado + `observer-token` → `PERMISSION_DENIED`
+4. petición con el mismo certificado + `greeter-token` → `Hola, Codespaces`
 
-Mutual TLS is required on every call. Compose checks a stranger certificate and then three bearer tokens. The JUnit checks those three bearer tokens with a certificate the demo CA already trusts.
+En el log: `certificado extraño rechazado`, `bearer token rechazado`,
+`Spring Security denegó el rol`,
+`call credential y Spring Security correctos: Hola, Codespaces`.
 
-### Compose client
+```bash
+mvn -pl server test
+```
 
-`docker compose up --build` runs `DemoRunner`. The client exits 0 only when all four results match.
+`CallCredentialSecurityTest` levanta el servidor en un puerto TLS aleatorio.
 
 ```mermaid
 sequenceDiagram
-    participant Client
-    participant Server
+    participant Cliente
+    participant Servidor
 
-    Client->>Server: certificate from another CA
-    Server-->>Client: handshake rejected
+    Cliente->>Servidor: certificado de otra CA
+    Servidor-->>Cliente: rechazo TLS
 
-    Client->>Server: demo CA certificate + bearer not-a-token
-    Server-->>Client: UNAUTHENTICATED
+    Cliente->>Servidor: CA de la demo + not-a-token
+    Servidor-->>Cliente: UNAUTHENTICATED
 
-    Client->>Server: demo CA certificate + bearer observer-token
-    Server-->>Client: PERMISSION_DENIED
+    Cliente->>Servidor: CA de la demo + observer-token
+    Servidor-->>Cliente: PERMISSION_DENIED
 
-    Client->>Server: demo CA certificate + bearer greeter-token
-    Server-->>Client: Hello, Codespaces
+    Cliente->>Servidor: CA de la demo + greeter-token
+    Servidor-->>Cliente: Hola, Codespaces
 ```
-
-### JUnit
-
-`mvn -pl server test` runs `CallCredentialSecurityTest` against the server on a random TLS port.
-
-```mermaid
-flowchart LR
-    trusted[Trusted client certificate] --> unknown[not-a-token]
-    trusted --> observer[observer-token]
-    trusted --> greeter[greeter-token]
-    unknown --> unauth[UNAUTHENTICATED]
-    observer --> denied[PERMISSION_DENIED]
-    greeter --> hello["Hello, Codespaces"]
-```
-
-### How the server classifies a call
-
-`BearerAuthenticationReader` reads the call credential. `AuthenticationManager` accepts only the two demo tokens. `@Secured("ROLE_GREETER")` allows `sayHello`.
 
 ```mermaid
 flowchart TD
-    cert{Certificate signed by the demo CA?}
-    cert -->|no| handshake[TLS handshake rejected]
-    cert -->|yes| token{Bearer call credential}
+    cert{¿Certificado firmado por la CA de la demo?}
+    cert -->|no| handshake[Rechazo TLS]
+    cert -->|sí| token{bearer token}
     token -->|not-a-token| unauth[UNAUTHENTICATED]
     token -->|observer-token| observer[ROLE_OBSERVER]
     token -->|greeter-token| greeter[ROLE_GREETER]
-    observer --> denied["@Secured denies the call"]
+    observer --> denied["@Secured deniega"]
     denied --> forbidden[PERMISSION_DENIED]
-    greeter --> ok["Hello, Codespaces"]
+    greeter --> ok["Hola, Codespaces"]
 ```
 
-## What is pinned
+## Versiones
 
-| Piece | Version |
+| Componente | Versión |
 | --- | --- |
 | Spring Boot | 2.7.18 |
 | Java | 8 |
 | grpc-spring-boot-starter | 2.15.0.RELEASE |
 | grpc-java | 1.58.0 |
+
+## Fuentes
+
+- [gRPC: Authentication](https://grpc.io/docs/guides/auth/): channel y call
+  credentials, TLS con client certificate opcional, tokens OAuth 2.0 por
+  llamada sobre TLS.
+- [grpc-spring: Server Security](https://grpc-ecosystem.github.io/grpc-spring/en/server/security.html):
+  `client-auth: REQUIRE`, `trust-cert-collection`, `BearerAuthenticationReader`
+  y `@Secured`.
+- [grpc-spring: Client Security](https://grpc-ecosystem.github.io/grpc-spring/en/client/security.html):
+  certificado de cliente y `CallCredentialsHelper.bearerAuth`.
+- [Spring Security 5.7.11: `PreAuthenticatedAuthenticationToken`](https://docs.spring.io/spring-security/site/docs/5.7.11/api/org/springframework/security/web/authentication/preauth/PreAuthenticatedAuthenticationToken.html)
+- [Spring Security 5.7.11: `JwtAuthenticationToken`](https://docs.spring.io/spring-security/site/docs/5.7.11/api/org/springframework/security/oauth2/server/resource/authentication/JwtAuthenticationToken.html)

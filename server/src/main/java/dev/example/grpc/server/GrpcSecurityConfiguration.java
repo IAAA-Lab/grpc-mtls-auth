@@ -29,6 +29,8 @@ public class GrpcSecurityConfiguration {
 
     @Bean
     GrpcAuthenticationReader authenticationReader() {
+        // PreAuthenticatedAuthenticationToken: el bearer token ya está en el metadata.
+        // En gRPC lo habitual: bearer token (access token OAuth 2.0, a menudo JWT) o client certificate (mTLS).
         return new BearerAuthenticationReader(token -> new PreAuthenticatedAuthenticationToken(token, null));
     }
 
@@ -43,7 +45,7 @@ public class GrpcSecurityConfiguration {
             if (DemoTokens.OBSERVER.equals(token)) {
                 return authenticated("observer", DemoTokens.ROLE_OBSERVER);
             }
-            throw new BadCredentialsException("invalid bearer token");
+            throw new BadCredentialsException("bearer token no válido");
         }
 
         @Override

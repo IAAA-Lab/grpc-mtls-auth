@@ -49,22 +49,22 @@ public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
             return;
         }
         if (!expectStatus(request, CallCredentialsHelper.bearerAuth(DemoTokens.INVALID),
-                Status.Code.UNAUTHENTICATED, "bearer token rejected")) {
+                Status.Code.UNAUTHENTICATED, "bearer token rechazado")) {
             return;
         }
         if (!expectStatus(request, CallCredentialsHelper.bearerAuth(DemoTokens.OBSERVER),
-                Status.Code.PERMISSION_DENIED, "spring security denied the role")) {
+                Status.Code.PERMISSION_DENIED, "Spring Security denegó el rol")) {
             return;
         }
         HelloReply reply = trustedHello(request, CallCredentialsHelper.bearerAuth(DemoTokens.GREETER));
         if (reply == null) {
             return;
         }
-        if (!"Hello, Codespaces".equals(reply.getMessage())) {
-            log.error("unexpected reply: {}", reply.getMessage());
+        if (!"Hola, Codespaces".equals(reply.getMessage())) {
+            log.error("respuesta inesperada: {}", reply.getMessage());
             return;
         }
-        log.info("call credential and spring security succeeded: {}", reply.getMessage());
+        log.info("call credential y Spring Security correctos: {}", reply.getMessage());
         exitCode = 0;
     }
 
@@ -80,19 +80,19 @@ public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
             for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
                 try {
                     HelloReply reply = stub.sayHello(request);
-                    log.error("stranger certificate was accepted: {}", reply.getMessage());
+                    log.error("se aceptó el certificado extraño: {}", reply.getMessage());
                     return false;
                 } catch (StatusRuntimeException ex) {
                     if (isHandshakeFailure(ex)) {
-                        log.info("stranger certificate rejected: {}", ex.getStatus());
+                        log.info("certificado extraño rechazado: {}", ex.getStatus());
                         return true;
                     }
                     if (isRetryable(ex) && attempt < ATTEMPTS) {
-                        log.info("server not ready ({}/{})", attempt, ATTEMPTS);
+                        log.info("servidor aún no listo ({}/{})", attempt, ATTEMPTS);
                         Thread.sleep(1000L);
                         continue;
                     }
-                    log.error("stranger call failed for an unexpected reason: {}", ex.getStatus());
+                    log.error("la llamada con certificado extraño falló por un motivo inesperado: {}", ex.getStatus());
                     return false;
                 }
             }
@@ -107,7 +107,7 @@ public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
         for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
             try {
                 HelloReply reply = trustedStub.withCallCredentials(credentials).sayHello(request);
-                log.error("{} was accepted: {}", label, reply.getMessage());
+                log.error("{} se aceptó: {}", label, reply.getMessage());
                 return false;
             } catch (StatusRuntimeException ex) {
                 if (ex.getStatus().getCode() == expected) {
@@ -115,11 +115,11 @@ public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
                     return true;
                 }
                 if (isRetryable(ex) && attempt < ATTEMPTS) {
-                    log.info("{} waiting ({}/{})", label, attempt, ATTEMPTS);
+                    log.info("{} en espera ({}/{})", label, attempt, ATTEMPTS);
                     Thread.sleep(1000L);
                     continue;
                 }
-                log.error("{} failed unexpectedly: {}", label, ex.getStatus());
+                log.error("{} falló de forma inesperada: {}", label, ex.getStatus());
                 return false;
             }
         }
@@ -132,11 +132,11 @@ public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
                 return trustedStub.withCallCredentials(credentials).sayHello(request);
             } catch (StatusRuntimeException ex) {
                 if (isRetryable(ex) && attempt < ATTEMPTS) {
-                    log.info("trusted call waiting ({}/{}): {}", attempt, ATTEMPTS, ex.getStatus().getCode());
+                    log.info("llamada de confianza en espera ({}/{}): {}", attempt, ATTEMPTS, ex.getStatus().getCode());
                     Thread.sleep(1000L);
                     continue;
                 }
-                log.error("trusted call failed: {}", ex.getStatus());
+                log.error("falló la llamada de confianza: {}", ex.getStatus());
                 return null;
             }
         }

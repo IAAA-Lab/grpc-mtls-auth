@@ -75,7 +75,7 @@ class CallCredentialSecurityTest {
             assertEquals(Status.Code.PERMISSION_DENIED, statusOf(stub, request, DemoTokens.OBSERVER));
             HelloReply reply = stub.withCallCredentials(CallCredentialsHelper.bearerAuth(DemoTokens.GREETER))
                     .sayHello(request);
-            assertEquals("Hello, Codespaces", reply.getMessage());
+            assertEquals("Hola, Codespaces", reply.getMessage());
         } finally {
             channel.shutdownNow();
         }

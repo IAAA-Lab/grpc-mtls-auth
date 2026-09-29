@@ -1,7 +1,7 @@
 package dev.example.grpc.hello;
 
 /**
- * Demo bearer tokens. They are not secrets; the Compose log is meant to show them being accepted or rejected.
+ * Tokens bearer de la demo. No son secretos; el log de Compose muestra si se aceptan o se rechazan.
  */
 public final class DemoTokens {
 

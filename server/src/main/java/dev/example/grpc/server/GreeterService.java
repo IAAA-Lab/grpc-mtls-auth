@@ -16,7 +16,7 @@ public class GreeterService extends GreeterGrpc.GreeterImplBase {
     @Secured(DemoTokens.ROLE_GREETER)
     public void sayHello(HelloRequest request, StreamObserver<HelloReply> responseObserver) {
         HelloReply reply = HelloReply.newBuilder()
-                .setMessage("Hello, " + request.getName())
+                .setMessage("Hola, " + request.getName())
                 .build();
         responseObserver.onNext(reply);
         responseObserver.onCompleted();
