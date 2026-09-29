@@ -18,6 +18,63 @@ docker compose up --build
 
 The client container exits 0 after the checks. Its log should show the stranger certificate rejected, `bearer token rejected`, `spring security denied the role`, then `call credential and spring security succeeded: Hello, Codespaces`.
 
+## Tests
+
+Mutual TLS is required on every call. Compose checks a stranger certificate and then three bearer tokens. The JUnit checks those three bearer tokens with a certificate the demo CA already trusts.
+
+### Compose client
+
+`docker compose up --build` runs `DemoRunner`. The client exits 0 only when all four results match.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>Server: certificate from another CA
+    Server-->>Client: handshake rejected
+
+    Client->>Server: demo CA certificate + bearer not-a-token
+    Server-->>Client: UNAUTHENTICATED
+
+    Client->>Server: demo CA certificate + bearer observer-token
+    Server-->>Client: PERMISSION_DENIED
+
+    Client->>Server: demo CA certificate + bearer greeter-token
+    Server-->>Client: Hello, Codespaces
+```
+
+### JUnit
+
+`mvn -pl server test` runs `CallCredentialSecurityTest` against the server on a random TLS port.
+
+```mermaid
+flowchart LR
+    trusted[Trusted client certificate] --> unknown[not-a-token]
+    trusted --> observer[observer-token]
+    trusted --> greeter[greeter-token]
+    unknown --> unauth[UNAUTHENTICATED]
+    observer --> denied[PERMISSION_DENIED]
+    greeter --> hello["Hello, Codespaces"]
+```
+
+### How the server classifies a call
+
+`BearerAuthenticationReader` reads the call credential. `AuthenticationManager` accepts only the two demo tokens. `@Secured("ROLE_GREETER")` allows `sayHello`.
+
+```mermaid
+flowchart TD
+    cert{Certificate signed by the demo CA?}
+    cert -->|no| handshake[TLS handshake rejected]
+    cert -->|yes| token{Bearer call credential}
+    token -->|not-a-token| unauth[UNAUTHENTICATED]
+    token -->|observer-token| observer[ROLE_OBSERVER]
+    token -->|greeter-token| greeter[ROLE_GREETER]
+    observer --> denied["@Secured denies the call"]
+    denied --> forbidden[PERMISSION_DENIED]
+    greeter --> ok["Hello, Codespaces"]
+```
+
 ## What is pinned
 
 | Piece | Version |
