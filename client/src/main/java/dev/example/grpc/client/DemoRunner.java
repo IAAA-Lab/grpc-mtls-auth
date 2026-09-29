@@ -9,15 +9,18 @@ import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.ExitCodeGenerator;
 import org.springframework.stereotype.Component;
 
+import dev.example.grpc.hello.DemoTokens;
 import dev.example.grpc.hello.GreeterGrpc;
 import dev.example.grpc.hello.HelloReply;
 import dev.example.grpc.hello.HelloRequest;
+import io.grpc.CallCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
 import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import net.devh.boot.grpc.client.inject.GrpcClient;
+import net.devh.boot.grpc.client.security.CallCredentialsHelper;
 
 @Component
 public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
@@ -45,7 +48,15 @@ public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
         if (!rejectedStranger(request)) {
             return;
         }
-        HelloReply reply = trustedHello(request);
+        if (!expectStatus(request, CallCredentialsHelper.bearerAuth(DemoTokens.INVALID),
+                Status.Code.UNAUTHENTICATED, "bearer token rejected")) {
+            return;
+        }
+        if (!expectStatus(request, CallCredentialsHelper.bearerAuth(DemoTokens.OBSERVER),
+                Status.Code.PERMISSION_DENIED, "spring security denied the role")) {
+            return;
+        }
+        HelloReply reply = trustedHello(request, CallCredentialsHelper.bearerAuth(DemoTokens.GREETER));
         if (reply == null) {
             return;
         }
@@ -53,7 +64,7 @@ public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
             log.error("unexpected reply: {}", reply.getMessage());
             return;
         }
-        log.info("mutual TLS call succeeded: {}", reply.getMessage());
+        log.info("call credential and spring security succeeded: {}", reply.getMessage());
         exitCode = 0;
     }
 
@@ -91,17 +102,41 @@ public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
         }
     }
 
-    private HelloReply trustedHello(HelloRequest request) throws InterruptedException {
+    private boolean expectStatus(HelloRequest request, CallCredentials credentials, Status.Code expected, String label)
+            throws InterruptedException {
         for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
             try {
-                return trustedStub.sayHello(request);
+                HelloReply reply = trustedStub.withCallCredentials(credentials).sayHello(request);
+                log.error("{} was accepted: {}", label, reply.getMessage());
+                return false;
+            } catch (StatusRuntimeException ex) {
+                if (ex.getStatus().getCode() == expected) {
+                    log.info("{}: {}", label, ex.getStatus());
+                    return true;
+                }
+                if (isRetryable(ex) && attempt < ATTEMPTS) {
+                    log.info("{} waiting ({}/{})", label, attempt, ATTEMPTS);
+                    Thread.sleep(1000L);
+                    continue;
+                }
+                log.error("{} failed unexpectedly: {}", label, ex.getStatus());
+                return false;
+            }
+        }
+        return false;
+    }
+
+    private HelloReply trustedHello(HelloRequest request, CallCredentials credentials) throws InterruptedException {
+        for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
+            try {
+                return trustedStub.withCallCredentials(credentials).sayHello(request);
             } catch (StatusRuntimeException ex) {
                 if (isRetryable(ex) && attempt < ATTEMPTS) {
                     log.info("trusted call waiting ({}/{}): {}", attempt, ATTEMPTS, ex.getStatus().getCode());
                     Thread.sleep(1000L);
                     continue;
                 }
-                log.error("trusted mutual TLS call failed: {}", ex.getStatus());
+                log.error("trusted call failed: {}", ex.getStatus());
                 return null;
             }
         }
