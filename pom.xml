@@ -25,7 +25,7 @@
 
   <properties>
     <java.version>25</java.version>
-    <spring-grpc.version>1.0.3</spring-grpc.version>
+    <spring-grpc.version>1.1.1</spring-grpc.version>
     <!-- Same versions that spring-grpc-dependencies 1.0.3 manages; protoc and its gRPC plugin must match them. -->
     <grpc.version>1.77.1</grpc.version>
     <protobuf-java.version>4.33.4</protobuf-java.version>
