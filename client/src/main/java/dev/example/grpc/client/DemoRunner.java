@@ -1,71 +1,53 @@
 package dev.example.grpc.client;
 
-import java.io.File;
+import java.util.concurrent.TimeUnit;
+
+import javax.net.ssl.SSLException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.ExitCodeGenerator;
+import org.springframework.core.NestedExceptionUtils;
+import org.springframework.grpc.client.GrpcChannelFactory;
+import org.springframework.grpc.client.interceptor.security.BearerTokenAuthenticationInterceptor;
 import org.springframework.stereotype.Component;
 
 import dev.example.grpc.hello.DemoTokens;
 import dev.example.grpc.hello.GreeterGrpc;
-import dev.example.grpc.hello.HelloReply;
 import dev.example.grpc.hello.HelloRequest;
-import io.grpc.CallCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
-import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
-import net.devh.boot.grpc.client.inject.GrpcClient;
-import net.devh.boot.grpc.client.security.CallCredentialsHelper;
+import io.grpc.health.v1.HealthCheckRequest;
+import io.grpc.health.v1.HealthGrpc;
 
 @Component
 public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
 
     private static final Logger log = LoggerFactory.getLogger(DemoRunner.class);
-    private static final int ATTEMPTS = 40;
+    private static final HelloRequest REQUEST = HelloRequest.newBuilder().setName("Codespaces").build();
+    private static final long STARTUP_SECONDS = 60;
+    private static final long CALL_SECONDS = 5;
 
-    private final GreeterGrpc.GreeterBlockingStub trustedStub;
-    private final String host;
-    private final int port;
+    private final ManagedChannel greeterChannel;
+    private final ManagedChannel strangerChannel;
     private int exitCode = 1;
 
-    public DemoRunner(
-            @GrpcClient("greeter") GreeterGrpc.GreeterBlockingStub trustedStub,
-            @Value("${app.grpc.host}") String host,
-            @Value("${app.grpc.port}") int port) {
-        this.trustedStub = trustedStub;
-        this.host = host;
-        this.port = port;
+    public DemoRunner(GrpcChannelFactory channels) {
+        this.greeterChannel = channels.createChannel("greeter");
+        this.strangerChannel = channels.createChannel("stranger");
     }
 
     @Override
-    public void run(String... args) throws Exception {
-        HelloRequest request = HelloRequest.newBuilder().setName("Codespaces").build();
-        if (!rejectedStranger(request)) {
-            return;
+    public void run(String... args) {
+        waitForServer();
+        if (rejectsStranger()
+                && expectStatus(DemoTokens.INVALID, Status.Code.UNAUTHENTICATED, "bearer token rechazado")
+                && expectStatus(DemoTokens.OBSERVER, Status.Code.PERMISSION_DENIED, "Spring Security denegó el rol")
+                && greets()) {
+            exitCode = 0;
         }
-        if (!expectStatus(request, CallCredentialsHelper.bearerAuth(DemoTokens.INVALID),
-                Status.Code.UNAUTHENTICATED, "bearer token rechazado")) {
-            return;
-        }
-        if (!expectStatus(request, CallCredentialsHelper.bearerAuth(DemoTokens.OBSERVER),
-                Status.Code.PERMISSION_DENIED, "Spring Security denegó el rol")) {
-            return;
-        }
-        HelloReply reply = trustedHello(request, CallCredentialsHelper.bearerAuth(DemoTokens.GREETER));
-        if (reply == null) {
-            return;
-        }
-        if (!"Hola, Codespaces".equals(reply.getMessage())) {
-            log.error("respuesta inesperada: {}", reply.getMessage());
-            return;
-        }
-        log.info("call credential y Spring Security correctos: {}", reply.getMessage());
-        exitCode = 0;
     }
 
     @Override
@@ -73,105 +55,64 @@ public class DemoRunner implements CommandLineRunner, ExitCodeGenerator {
         return exitCode;
     }
 
-    private boolean rejectedStranger(HelloRequest request) throws Exception {
-        ManagedChannel channel = strangerChannel();
+    private void waitForServer() {
+        var status = HealthGrpc.newBlockingStub(greeterChannel)
+                .withWaitForReady()
+                .withDeadlineAfter(STARTUP_SECONDS, TimeUnit.SECONDS)
+                .check(HealthCheckRequest.getDefaultInstance())
+                .getStatus();
+        log.info("servidor listo: {}", status);
+    }
+
+    private boolean rejectsStranger() {
         try {
-            GreeterGrpc.GreeterBlockingStub stub = GreeterGrpc.newBlockingStub(channel);
-            for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
-                try {
-                    HelloReply reply = stub.sayHello(request);
-                    log.error("se aceptó el certificado ajeno: {}", reply.getMessage());
-                    return false;
-                } catch (StatusRuntimeException ex) {
-                    if (isHandshakeFailure(ex)) {
-                        log.info("certificado ajeno rechazado: {}", ex.getStatus());
-                        return true;
-                    }
-                    if (isRetryable(ex) && attempt < ATTEMPTS) {
-                        log.info("servidor aún no listo ({}/{})", attempt, ATTEMPTS);
-                        Thread.sleep(1000L);
-                        continue;
-                    }
-                    log.error("la llamada con certificado ajeno falló por un motivo inesperado: {}", ex.getStatus());
-                    return false;
-                }
-            }
+            var reply = stub(strangerChannel, DemoTokens.GREETER).sayHello(REQUEST);
+            log.error("se aceptó el certificado ajeno: {}", reply.getMessage());
             return false;
-        } finally {
-            channel.shutdownNow();
+        } catch (StatusRuntimeException ex) {
+            if (ex.getStatus().getCode() == Status.Code.UNAVAILABLE
+                    && NestedExceptionUtils.getMostSpecificCause(ex) instanceof SSLException tls) {
+                log.info("certificado ajeno rechazado en el handshake TLS: {}", tls.getMessage());
+                return true;
+            }
+            log.error("la llamada con certificado ajeno falló por otro motivo: {}", ex.getStatus());
+            return false;
         }
     }
 
-    private boolean expectStatus(HelloRequest request, CallCredentials credentials, Status.Code expected, String label)
-            throws InterruptedException {
-        for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
-            try {
-                HelloReply reply = trustedStub.withCallCredentials(credentials).sayHello(request);
-                log.error("{} se aceptó: {}", label, reply.getMessage());
-                return false;
-            } catch (StatusRuntimeException ex) {
-                if (ex.getStatus().getCode() == expected) {
-                    log.info("{}: {}", label, ex.getStatus());
-                    return true;
-                }
-                if (isRetryable(ex) && attempt < ATTEMPTS) {
-                    log.info("{} en espera ({}/{})", label, attempt, ATTEMPTS);
-                    Thread.sleep(1000L);
-                    continue;
-                }
-                log.error("{} falló de forma inesperada: {}", label, ex.getStatus());
+    private boolean expectStatus(String token, Status.Code expected, String label) {
+        try {
+            var reply = stub(greeterChannel, token).sayHello(REQUEST);
+            log.error("{} no ocurrió: {}", label, reply.getMessage());
+            return false;
+        } catch (StatusRuntimeException ex) {
+            if (ex.getStatus().getCode() == expected) {
+                log.info("{}: {}", label, ex.getStatus());
+                return true;
+            }
+            log.error("{} falló de forma inesperada: {}", label, ex.getStatus());
+            return false;
+        }
+    }
+
+    private boolean greets() {
+        try {
+            var message = stub(greeterChannel, DemoTokens.GREETER).sayHello(REQUEST).getMessage();
+            if (!"Hola, Codespaces".equals(message)) {
+                log.error("respuesta inesperada: {}", message);
                 return false;
             }
+            log.info("mTLS, bearer token y rol correctos: {}", message);
+            return true;
+        } catch (StatusRuntimeException ex) {
+            log.error("falló la llamada de confianza: {}", ex.getStatus());
+            return false;
         }
-        return false;
     }
 
-    private HelloReply trustedHello(HelloRequest request, CallCredentials credentials) throws InterruptedException {
-        for (int attempt = 1; attempt <= ATTEMPTS; attempt++) {
-            try {
-                return trustedStub.withCallCredentials(credentials).sayHello(request);
-            } catch (StatusRuntimeException ex) {
-                if (isRetryable(ex) && attempt < ATTEMPTS) {
-                    log.info("llamada de confianza en espera ({}/{}): {}", attempt, ATTEMPTS, ex.getStatus().getCode());
-                    Thread.sleep(1000L);
-                    continue;
-                }
-                log.error("falló la llamada de confianza: {}", ex.getStatus());
-                return null;
-            }
-        }
-        return null;
-    }
-
-    private ManagedChannel strangerChannel() throws Exception {
-        File trust = new File("/certs/ca.crt");
-        File certificate = new File("/certs/stranger.crt");
-        File key = new File("/certs/stranger.pkcs8.pem");
-        return NettyChannelBuilder.forAddress(host, port)
-                .sslContext(GrpcSslContexts.forClient()
-                        .trustManager(trust)
-                        .keyManager(certificate, key)
-                        .build())
-                .build();
-    }
-
-    private static boolean isRetryable(StatusRuntimeException ex) {
-        return ex.getStatus().getCode() == Status.Code.UNAVAILABLE && !isHandshakeFailure(ex);
-    }
-
-    private static boolean isHandshakeFailure(StatusRuntimeException ex) {
-        StringBuilder text = new StringBuilder();
-        text.append(String.valueOf(ex.getStatus().getDescription()));
-        Throwable cause = ex.getCause();
-        while (cause != null) {
-            text.append(' ').append(cause.getClass().getName());
-            text.append(' ').append(String.valueOf(cause.getMessage()));
-            cause = cause.getCause();
-        }
-        String lower = text.toString().toLowerCase();
-        return lower.contains("handshake")
-                || lower.contains("certificate")
-                || lower.contains("ssl")
-                || lower.contains("tls");
+    private static GreeterGrpc.GreeterBlockingStub stub(ManagedChannel channel, String token) {
+        return GreeterGrpc.newBlockingStub(channel)
+                .withInterceptors(new BearerTokenAuthenticationInterceptor(token))
+                .withDeadlineAfter(CALL_SECONDS, TimeUnit.SECONDS);
     }
 }

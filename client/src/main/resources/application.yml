@@ -1,24 +1,35 @@
 spring:
   main:
     web-application-type: none
-
-grpc:
-  client:
-    greeter:
-      address: ${GRPC_SERVER_ADDRESS:static://localhost:9090}
-      negotiation-type: TLS
-      security:
-        client-auth-enabled: true
-        certificate-chain: file:/certs/client.crt
-        private-key: file:/certs/client.pkcs8.pem
-        trust-cert-collection: file:/certs/ca.crt
-
-app:
+  ssl:
+    bundle:
+      pem:
+        client:
+          keystore:
+            certificate: file:${CERTS_DIR:/certs}/client.crt
+            private-key: file:${CERTS_DIR:/certs}/client.pkcs8.pem
+          truststore:
+            certificate: file:${CERTS_DIR:/certs}/ca.crt
+        stranger:
+          keystore:
+            certificate: file:${CERTS_DIR:/certs}/stranger.crt
+            private-key: file:${CERTS_DIR:/certs}/stranger.pkcs8.pem
+          truststore:
+            certificate: file:${CERTS_DIR:/certs}/ca.crt
   grpc:
-    host: ${GRPC_SERVER_HOST:localhost}
-    port: ${GRPC_SERVER_PORT:9090}
+    client:
+      channels:
+        greeter:
+          address: ${GRPC_SERVER_ADDRESS:static://localhost:9090}
+          negotiation-type: tls
+          ssl:
+            bundle: client
+        stranger:
+          address: ${GRPC_SERVER_ADDRESS:static://localhost:9090}
+          negotiation-type: tls
+          ssl:
+            bundle: stranger
 
 logging:
   level:
     io.grpc: INFO
-    net.devh.boot.grpc: INFO

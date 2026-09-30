@@ -1,9 +1,13 @@
 {
-  "name": "Spring Boot 2.7 gRPC mutual TLS (Java 8)",
-  "image": "mcr.microsoft.com/devcontainers/java:8-bookworm",
+  "name": "Spring Boot 4 gRPC mutual TLS (Java 25)",
+  "image": "mcr.microsoft.com/devcontainers/java:25-bookworm",
   "features": {
+    "ghcr.io/devcontainers/features/java:1": {
+      "version": "none",
+      "installMaven": "true"
+    },
     "ghcr.io/devcontainers/features/docker-in-docker:2": {}
   },
   "forwardPorts": [9090],
-  "postCreateCommand": "java -version && docker compose version"
+  "postCreateCommand": "java -version && mvn -v && docker compose version"
 }

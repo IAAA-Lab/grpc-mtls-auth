@@ -7,7 +7,7 @@
   <parent>
     <groupId>dev.example</groupId>
     <artifactId>grpc-springboot2-auth</artifactId>
-    <version>1.0.0</version>
+    <version>2.0.0</version>
   </parent>
 
   <artifactId>client</artifactId>
@@ -19,13 +19,17 @@
       <artifactId>grpc-hello-api</artifactId>
     </dependency>
     <dependency>
-      <groupId>org.springframework.boot</groupId>
-      <artifactId>spring-boot-starter</artifactId>
+      <groupId>org.springframework.grpc</groupId>
+      <artifactId>spring-grpc-client-spring-boot-starter</artifactId>
+    </dependency>
+    <!-- BearerTokenAuthenticationInterceptor 1.0.3 reads its header key from the server-side GrpcSecurity class. -->
+    <dependency>
+      <groupId>org.springframework.security</groupId>
+      <artifactId>spring-security-config</artifactId>
     </dependency>
     <dependency>
-      <groupId>net.devh</groupId>
-      <artifactId>grpc-client-spring-boot-starter</artifactId>
-      <version>${grpc-spring-boot.version}</version>
+      <groupId>io.grpc</groupId>
+      <artifactId>grpc-services</artifactId>
     </dependency>
   </dependencies>
 
