@@ -12,6 +12,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    ignore:
+      # Targets LTS Java; Dependabot reads maven:3[.9]-eclipse-temurin-NN as 3[.9].NN, so these drop Java 26-28.
+      - dependency-name: maven
+        versions: [">= 3.26, < 3.29", ">= 3.9.26, < 3.9.29"]
   - package-ecosystem: docker-compose
     directory: /
     schedule:
