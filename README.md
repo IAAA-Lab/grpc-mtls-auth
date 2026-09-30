@@ -178,8 +178,8 @@ real, con mTLS, en un puerto aleatorio. Comprueba:
 
 ## Integración continua
 
-En cada push y en cada pull request a `main`, GitHub Actions ejecuta dos
-trabajos:
+En cada push, a cualquier rama, y en cada pull request a `main`, GitHub
+Actions ejecuta dos trabajos:
 
 - **maven**: `mvn -B -ntp verify` con Java 25, que compila los tres módulos y
   pasa los tests;
