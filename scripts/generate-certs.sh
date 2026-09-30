@@ -1,11 +1,12 @@
 #!/bin/sh
-# Demo CA only. Certificates live in the Compose volume, not in git.
+# Demo CA only. Usage: generate-certs.sh [output-dir]  (default /certs)
 set -eu
-OUT=/certs
+OUT=${1:-/certs}
 if [ -f "$OUT/ca.crt" ]; then
   exit 0
 fi
-apk add --no-cache openssl
+command -v openssl >/dev/null 2>&1 || apk add --no-cache openssl
+mkdir -p "$OUT"
 cd "$OUT"
 
 openssl req -x509 -newkey rsa:2048 -sha256 -days 365 -nodes \

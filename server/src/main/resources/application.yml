@@ -1,18 +1,26 @@
 spring:
   main:
     web-application-type: none
-
-grpc:
-  server:
-    port: ${GRPC_PORT:9090}
-    security:
-      enabled: true
-      certificate-chain: file:/certs/server.crt
-      private-key: file:/certs/server.pkcs8.pem
-      trust-cert-collection: file:/certs/ca.crt
-      client-auth: REQUIRE
+  ssl:
+    bundle:
+      pem:
+        server:
+          keystore:
+            certificate: file:${CERTS_DIR:/certs}/server.crt
+            private-key: file:${CERTS_DIR:/certs}/server.pkcs8.pem
+          truststore:
+            certificate: file:${CERTS_DIR:/certs}/ca.crt
+  grpc:
+    server:
+      port: ${GRPC_PORT:9090}
+      ssl:
+        bundle: server
+        client-auth: require
+      reflection:
+        enabled: false
 
 logging:
   level:
     io.grpc: INFO
-    net.devh.boot.grpc: INFO
+    # The generated bindService() is final: the proxy binds itself, so @PreAuthorize still applies.
+    org.springframework.aop.framework.CglibAopProxy: ERROR

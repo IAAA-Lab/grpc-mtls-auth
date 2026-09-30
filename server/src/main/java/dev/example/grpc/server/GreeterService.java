@@ -1,21 +1,20 @@
 package dev.example.grpc.server;
 
-import org.springframework.security.access.annotation.Secured;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.stereotype.Service;
 
-import dev.example.grpc.hello.DemoTokens;
 import dev.example.grpc.hello.GreeterGrpc;
 import dev.example.grpc.hello.HelloReply;
 import dev.example.grpc.hello.HelloRequest;
 import io.grpc.stub.StreamObserver;
-import net.devh.boot.grpc.server.service.GrpcService;
 
-@GrpcService
+@Service
 public class GreeterService extends GreeterGrpc.GreeterImplBase {
 
     @Override
-    @Secured(DemoTokens.ROLE_GREETER)
+    @PreAuthorize("hasRole('GREETER')")
     public void sayHello(HelloRequest request, StreamObserver<HelloReply> responseObserver) {
-        HelloReply reply = HelloReply.newBuilder()
+        var reply = HelloReply.newBuilder()
                 .setMessage("Hola, " + request.getName())
                 .build();
         responseObserver.onNext(reply);
