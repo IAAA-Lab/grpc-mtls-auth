@@ -1,6 +1,6 @@
 services:
   certs:
-    image: alpine:3.20
+    image: alpine:3.24
     command: ["sh", "/scripts/generate-certs.sh"]
     volumes:
       - ./scripts/generate-certs.sh:/scripts/generate-certs.sh:ro
