@@ -1,6 +1,6 @@
 # Cliente y servidor gRPC con mTLS y tokens (Spring Boot 4)
 
-[![CI](https://github.com/IAAA-Lab/grpc-springboot2-mtls/actions/workflows/ci.yml/badge.svg)](https://github.com/IAAA-Lab/grpc-springboot2-mtls/actions/workflows/ci.yml)
+[![CI](https://github.com/IAAA-Lab/grpc-mtls-auth/actions/workflows/ci.yml/badge.svg)](https://github.com/IAAA-Lab/grpc-mtls-auth/actions/workflows/ci.yml)
 
 ## Qué muestra
 
@@ -21,7 +21,7 @@ segundo sigue filtrando. Es una forma de **defensa en profundidad**. El ejemplo
 usa **Java 25**, **Spring Boot 4.0** y **Spring gRPC 1.0**.
 
 La versión anterior, con Java 8 y Spring Boot 2.7, sigue disponible en la
-etiqueta [`springboot-2.7`](https://github.com/IAAA-Lab/grpc-springboot2-mtls/tree/springboot-2.7).
+etiqueta [`springboot-2.7`](https://github.com/IAAA-Lab/grpc-mtls-auth/tree/springboot-2.7).
 
 ## Conceptos
 
