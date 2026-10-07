@@ -29,7 +29,7 @@
     <!-- Same versions that spring-grpc-dependencies 1.0.3 manages; protoc and its gRPC plugin must match them. -->
     <grpc.version>1.77.1</grpc.version>
     <protobuf-java.version>4.33.4</protobuf-java.version>
-    <protobuf-maven-plugin.version>5.1.10</protobuf-maven-plugin.version>
+    <protobuf-maven-plugin.version>5.1.11</protobuf-maven-plugin.version>
   </properties>
 
   <dependencyManagement>
